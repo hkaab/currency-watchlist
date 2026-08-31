@@ -1,0 +1,29 @@
+# .NET
+backend/**/bin/
+backend/**/obj/
+backend/**/*.db
+backend/**/*.db-shm
+backend/**/*.db-wal
+backend/**/TestResults/
+backend/coverage-results/
+backend/test-output.log
+*.user
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
+frontend/.env*.local
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Logs
+*.log

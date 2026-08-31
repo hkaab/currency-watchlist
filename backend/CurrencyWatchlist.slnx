@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CurrencyWatchlist.Api/CurrencyWatchlist.Api.csproj" />
+    <Project Path="src/CurrencyWatchlist.Application/CurrencyWatchlist.Application.csproj" />
+    <Project Path="src/CurrencyWatchlist.Domain/CurrencyWatchlist.Domain.csproj" />
+    <Project Path="src/CurrencyWatchlist.Infrastructure/CurrencyWatchlist.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CurrencyWatchlist.Api.Tests/CurrencyWatchlist.Api.Tests.csproj" />
+    <Project Path="tests/CurrencyWatchlist.Application.Tests/CurrencyWatchlist.Application.Tests.csproj" />
+  </Folder>
+</Solution>
