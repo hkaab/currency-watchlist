@@ -1,5 +1,9 @@
 # Currency Watchlist & Alert Service
 
+[![CI](https://github.com/hkaab/currency-watchlist/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hkaab/currency-watchlist/actions/workflows/ci.yml)
+[![Backend coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/hkaab/currency-watchlist/main/.github/badges/backend-coverage.json)](https://github.com/hkaab/currency-watchlist/actions/workflows/ci.yml)
+[![Frontend coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/hkaab/currency-watchlist/main/.github/badges/frontend-coverage.json)](https://github.com/hkaab/currency-watchlist/actions/workflows/ci.yml)
+
 Create currency watchlists, track currency pairs, fetch live exchange rates from [Frankfurter](https://frankfurter.dev/), and get alerted when a rate crosses a threshold — with live updates pushed to the browser instead of polling.
 
 - **Backend**: .NET 10 / ASP.NET Core, Clean Architecture (Domain → Application → Infrastructure → Api), SQLite via EF Core, Swagger/OpenAPI.
@@ -57,6 +61,16 @@ npm run test:e2e       # Playwright, against the real backend + frontend dev ser
 ```
 
 Current frontend line coverage: **93.7%** (unit). All three Playwright specs pass against the live stack, including a two-tab test that confirms a rate refresh in one tab pushes live to another tab viewing the same watchlist via SignalR — the actual event-driven behavior, not a mock of it.
+
+### CI/CD
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push/PR to `main`:
+
+- **Backend job**: `dotnet restore` → `build` (Release) → `test` with coverage collection.
+- **Frontend job**: `npm ci` → `lint` → `build` → `test:coverage`.
+- **Badges job** (push to `main` only): reads both coverage numbers and commits updated badge JSON to `.github/badges/`, which the README badges above read live via shields.io's endpoint badge — no third-party coverage service or account needed.
+
+E2E (Playwright) isn't run in CI since it exercises the real Frankfurter API against two live dev servers — see "Tests" above to run it locally.
 
 ## Assumptions
 
