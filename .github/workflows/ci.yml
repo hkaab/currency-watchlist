@@ -36,6 +36,7 @@ jobs:
       - name: Test with coverage
         run: >
           dotnet test CurrencyWatchlist.slnx --no-build --configuration Release
+          --filter "Category!=Live"
           --collect:"XPlat Code Coverage" --results-directory ./coverage-results
 
       - name: Compute coverage percentage
