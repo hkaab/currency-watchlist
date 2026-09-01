@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import type { AlertCondition, WatchlistItemResponse } from "@/lib/types";
 
@@ -10,17 +10,17 @@ interface CreateAlertFormProps {
 }
 
 export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
-  const [watchlistItemId, setWatchlistItemId] = useState<number>(items[0]?.id ?? 0);
+  // null = no explicit choice yet; falls back to the first item below. Deriving the
+  // effective selection during render (rather than syncing it via an effect) keeps it
+  // correct even when items arrive or get removed after this form has already mounted.
+  const [explicitSelection, setExplicitSelection] = useState<number | null>(null);
+  const watchlistItemId =
+    explicitSelection !== null && items.some((i) => i.id === explicitSelection)
+      ? explicitSelection
+      : items[0]?.id ?? 0;
+
   const [condition, setCondition] = useState<AlertCondition>("Above");
   const [threshold, setThreshold] = useState("");
-
-  // Items can arrive (or be removed) after this form has already mounted - keep the
-  // selection valid rather than pinning it to whatever was available on first render.
-  useEffect(() => {
-    if (items.length > 0 && !items.some((i) => i.id === watchlistItemId)) {
-      setWatchlistItemId(items[0].id);
-    }
-  }, [items, watchlistItemId]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +56,7 @@ export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
         <select
           id="alert-pair"
           value={watchlistItemId}
-          onChange={(e) => setWatchlistItemId(Number(e.target.value))}
+          onChange={(e) => setExplicitSelection(Number(e.target.value))}
         >
           {items.map((item) => (
             <option key={item.id} value={item.id}>
