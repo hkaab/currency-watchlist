@@ -14,7 +14,28 @@ See [`docs/architecture.md`](docs/architecture.md) for two diagrams: this system
 
 ## Running it
 
-### Backend
+### With Docker (fastest way to try it)
+
+Prerequisites: Docker with Compose v2.
+
+```bash
+docker compose up --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:5289` · Swagger UI: `http://localhost:5289/swagger`
+
+What's happening under the hood:
+
+- `backend/Dockerfile` is a multi-stage build (`dotnet publish` on the SDK image, then the slim `aspnet` runtime image). The SQLite file is written to a named volume (`backend-data`) mounted at `/data`, so data survives `docker compose restart`/`down` (not `down -v`).
+- `frontend/Dockerfile` builds Next.js's standalone output on `node:22-alpine`. `NEXT_PUBLIC_API_BASE_URL` is a **build arg**, not just a runtime env var — Next.js inlines `NEXT_PUBLIC_*` values into the client bundle at build time, and since the browser (not the frontend container) calls the API directly, that value has to be the host-reachable address (`http://localhost:5289`), not an in-network service name.
+- `docker-compose.yml` wires both together; `Cors__AllowedOrigins__0` and `ConnectionStrings__Default` are overridden via environment variables using ASP.NET Core's `__` config-key convention.
+
+Stop everything with `docker compose down` (add `-v` to also delete the SQLite volume).
+
+### Without Docker
+
+#### Backend
 
 Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
@@ -27,7 +48,7 @@ dotnet run
 - Swagger UI: `http://localhost:5289/swagger`
 - A SQLite database (`currencywatchlist.db`) is created and migrated automatically on first run.
 
-### Frontend
+#### Frontend
 
 Prerequisites: Node 20+.
 
@@ -106,7 +127,9 @@ Everything in the "enterprise-scale" half of `docs/architecture.md`: decouple ra
 ## Repository layout
 
 ```
-backend/    .NET 10 solution (Domain, Application, Infrastructure, Api + tests)
-frontend/   Next.js app (App Router, TypeScript)
-docs/       Architecture diagrams
+backend/            .NET 10 solution (Domain, Application, Infrastructure, Api + tests)
+frontend/           Next.js app (App Router, TypeScript)
+docs/               Architecture diagrams
+docker-compose.yml  Runs both containers together (see "With Docker" above)
+.github/workflows/  CI (build, test, coverage badges)
 ```

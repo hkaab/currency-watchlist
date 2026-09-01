@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5289:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development # keeps Swagger UI enabled at /swagger
+      ConnectionStrings__Default: "Data Source=/data/currencywatchlist.db"
+      Cors__AllowedOrigins__0: "http://localhost:3000"
+    volumes:
+      - backend-data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # The browser (on the host) calls this URL directly, so it must be the
+        # host-reachable address - not the in-network service name.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:5289
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
