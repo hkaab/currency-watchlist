@@ -34,6 +34,14 @@ public static class DependencyInjection
         })
         .AddFrankfurterResilience();
 
+        services.AddMemoryCache();
+        services.AddHttpClient<ICurrencyCatalog, FrankfurterCurrencyCatalog>(client =>
+        {
+            client.BaseAddress = new Uri(frankfurterBaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(10);
+        })
+        .AddFrankfurterResilience();
+
         return services;
     }
 }

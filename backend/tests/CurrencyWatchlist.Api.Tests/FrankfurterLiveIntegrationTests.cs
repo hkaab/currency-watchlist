@@ -2,6 +2,7 @@ using CurrencyWatchlist.Application.Common.Exceptions;
 using CurrencyWatchlist.Application.Interfaces;
 using CurrencyWatchlist.Infrastructure.ExternalServices;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CurrencyWatchlist.Api.Tests;
@@ -68,5 +69,36 @@ public class FrankfurterLiveIntegrationTests
         var act = () => provider.GetLatestRatesAsync("USD", ["ZZZ"], CancellationToken.None);
 
         await act.Should().ThrowAsync<UnknownCurrencyException>();
+    }
+
+    private static ICurrencyCatalog CreateCurrencyCatalog()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddHttpClient<ICurrencyCatalog, FrankfurterCurrencyCatalog>(client =>
+            {
+                client.BaseAddress = new Uri("https://api.frankfurter.app/");
+                client.Timeout = TimeSpan.FromSeconds(10);
+            })
+            .AddFrankfurterResilience();
+
+        return services.BuildServiceProvider().GetRequiredService<ICurrencyCatalog>();
+    }
+
+    [Fact]
+    public async Task Recognizes_a_real_supported_currency()
+    {
+        var catalog = CreateCurrencyCatalog();
+
+        (await catalog.IsSupportedAsync("AUD", CancellationToken.None)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Rejects_a_currency_the_real_provider_does_not_support()
+    {
+        var catalog = CreateCurrencyCatalog();
+
+        (await catalog.IsSupportedAsync("ZZZ", CancellationToken.None)).Should().BeFalse();
     }
 }

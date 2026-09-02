@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using CurrencyWatchlist.Application.Dtos.Items;
 using CurrencyWatchlist.Application.Dtos.Watchlists;
 using FluentAssertions;
+using NSubstitute;
 
 namespace CurrencyWatchlist.Api.Tests;
 
@@ -39,6 +40,18 @@ public class WatchlistItemsEndpointTests : IDisposable
 
         var response = await _client.PostAsJsonAsync(
             $"/api/watchlists/{watchlist.Id}/items", new { baseCurrency = "US", quoteCurrency = "AUD" }, JsonTestOptions.Default);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Add_item_with_a_currency_the_provider_does_not_support_returns_400()
+    {
+        _factory.CurrencyCatalogFake.IsSupportedAsync("ZZZ", Arg.Any<CancellationToken>()).Returns(false);
+        var watchlist = await CreateWatchlistAsync("Items List");
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/watchlists/{watchlist.Id}/items", new { baseCurrency = "ZZZ", quoteCurrency = "AUD" }, JsonTestOptions.Default);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

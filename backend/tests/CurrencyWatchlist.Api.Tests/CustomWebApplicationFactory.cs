@@ -11,8 +11,9 @@ using NSubstitute;
 namespace CurrencyWatchlist.Api.Tests;
 
 /// <summary>
-/// Boots the real Api pipeline against an isolated in-memory SQLite database and a mocked
-/// <see cref="IRateProvider"/>, so tests never hit the real Frankfurter API.
+/// Boots the real Api pipeline against an isolated in-memory SQLite database and mocked
+/// <see cref="IRateProvider"/>/<see cref="ICurrencyCatalog"/>, so tests never hit the real
+/// Frankfurter API.
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -20,9 +21,13 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
     public IRateProvider RateProviderFake { get; } = Substitute.For<IRateProvider>();
 
+    /// <summary>Permissive by default (every code is "supported") so existing tests don't need to configure it explicitly.</summary>
+    public ICurrencyCatalog CurrencyCatalogFake { get; } = Substitute.For<ICurrencyCatalog>();
+
     public CustomWebApplicationFactory()
     {
         _connection.Open();
+        CurrencyCatalogFake.IsSupportedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -34,6 +39,9 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<IRateProvider>();
             services.AddSingleton(RateProviderFake);
+
+            services.RemoveAll<ICurrencyCatalog>();
+            services.AddSingleton(CurrencyCatalogFake);
         });
     }
 

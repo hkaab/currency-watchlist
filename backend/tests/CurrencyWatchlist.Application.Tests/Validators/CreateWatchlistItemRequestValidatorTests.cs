@@ -1,17 +1,26 @@
 using CurrencyWatchlist.Application.Dtos.Items;
+using CurrencyWatchlist.Application.Interfaces;
 using CurrencyWatchlist.Application.Validators;
 using FluentAssertions;
+using NSubstitute;
 
 namespace CurrencyWatchlist.Application.Tests.Validators;
 
 public class CreateWatchlistItemRequestValidatorTests
 {
-    private readonly CreateWatchlistItemRequestValidator _validator = new();
+    private readonly ICurrencyCatalog _currencyCatalog = Substitute.For<ICurrencyCatalog>();
+    private readonly CreateWatchlistItemRequestValidator _validator;
+
+    public CreateWatchlistItemRequestValidatorTests()
+    {
+        _currencyCatalog.IsSupportedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+        _validator = new CreateWatchlistItemRequestValidator(_currencyCatalog);
+    }
 
     [Fact]
-    public void Valid_request_passes()
+    public async Task Valid_request_passes()
     {
-        var result = _validator.Validate(new CreateWatchlistItemRequest("USD", "AUD"));
+        var result = await _validator.ValidateAsync(new CreateWatchlistItemRequest("USD", "AUD"));
 
         result.IsValid.Should().BeTrue();
     }
@@ -21,18 +30,38 @@ public class CreateWatchlistItemRequestValidatorTests
     [InlineData("USDD", "AUD")]
     [InlineData("US1", "AUD")]
     [InlineData("", "AUD")]
-    public void Invalid_base_currency_fails(string baseCurrency, string quoteCurrency)
+    public async Task Invalid_base_currency_format_fails(string baseCurrency, string quoteCurrency)
     {
-        var result = _validator.Validate(new CreateWatchlistItemRequest(baseCurrency, quoteCurrency));
+        var result = await _validator.ValidateAsync(new CreateWatchlistItemRequest(baseCurrency, quoteCurrency));
 
         result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void Same_base_and_quote_currency_fails()
+    public async Task Same_base_and_quote_currency_fails()
     {
-        var result = _validator.Validate(new CreateWatchlistItemRequest("USD", "usd"));
+        var result = await _validator.ValidateAsync(new CreateWatchlistItemRequest("USD", "usd"));
 
         result.IsValid.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Unsupported_currency_fails_even_with_a_valid_3_letter_format()
+    {
+        _currencyCatalog.IsSupportedAsync("ZZZ", Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await _validator.ValidateAsync(new CreateWatchlistItemRequest("ZZZ", "AUD"));
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("not a currency"));
+    }
+
+    [Fact]
+    public async Task Skips_the_catalog_check_when_the_format_is_already_invalid()
+    {
+        var result = await _validator.ValidateAsync(new CreateWatchlistItemRequest("US", "AUD"));
+
+        result.IsValid.Should().BeFalse();
+        await _currencyCatalog.DidNotReceive().IsSupportedAsync("US", Arg.Any<CancellationToken>());
     }
 }
