@@ -1,3 +1,4 @@
+using CurrencyWatchlist.Api.BackgroundServices;
 using CurrencyWatchlist.Api.ErrorHandling;
 using CurrencyWatchlist.Api.Filters;
 using CurrencyWatchlist.Api.Realtime;
@@ -55,6 +56,7 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHostedService<RateRefreshBackgroundService>();
 
 var app = builder.Build();
 

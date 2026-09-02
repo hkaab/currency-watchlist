@@ -9,6 +9,7 @@ Create currency watchlists, track currency pairs, fetch live exchange rates from
 - **Backend**: .NET 10 / ASP.NET Core, Clean Architecture (Domain → Application → Infrastructure → Api), SQLite via EF Core, Swagger/OpenAPI.
 - **Frontend**: Next.js 16 (App Router, TypeScript), functional components, plain hooks for state (no Redux).
 - **Event-driven, front-to-back**: the backend publishes in-process domain events (`RatesRefreshedEvent`, `AlertTriggeredEvent`) that drive alert evaluation and push live updates to the frontend over SignalR; the frontend subscribes and updates the UI reactively.
+- **Self-refreshing**: a scheduled background job refreshes every tracked currency pair every 5 minutes (configurable) — rates and alerts stay current without anyone clicking "Refresh Rates."
 
 See [`docs/architecture.md`](docs/architecture.md) for two diagrams: this system, and how it would look at enterprise scale.
 
@@ -18,7 +19,8 @@ See [`docs/architecture.md`](docs/architecture.md) for two diagrams: this system
 - **SOLID isn't just a slogan here** — concretely: repositories are split narrowly per aggregate rather than one fat `IRepository<T>` (ISP); `IRateProvider` and the event-handler interfaces mean new behavior (a second rate source, a new reaction to a rate refresh) plugs in via a new class + DI registration, not by editing existing code (OCP); every service depends on interfaces injected via the constructor, never `new`s up a concrete repository or HTTP client (DIP).
 - **DTOs in, DTOs out — entities never cross the API boundary.** Controllers and services exchange `CreateWatchlistRequest`/`WatchlistResponse`/etc., mapped from entities via small extension methods (`MappingExtensions.cs`). This keeps EF Core's tracking/lazy-loading concerns out of the wire format and means the JSON shape doesn't accidentally change when the schema does.
 - **Event-driven backend, not just "async."** A rate refresh doesn't call an "evaluate alerts" method directly — it publishes a `RatesRefreshedEvent`, and independent handlers (`EvaluateAlertsOnRateRefreshHandler`, `PushRateUpdateHandler`) react to it, unaware of each other. Adding a third reaction (e.g. an email notifier) means adding a handler class, not modifying the refresh code path. See **Tradeoffs** below for why this is in-process rather than a message broker.
-- **Real-time via SignalR, not polling.** The frontend doesn't refetch on a timer to see if rates changed elsewhere — the backend pushes `RatesUpdated`/`AlertTriggered` to whichever browser tabs are viewing the affected watchlist. This is the actual "event-driven front-to-back" requirement, not just a buzzword: verified in `e2e/golden-path.spec.ts` with a test that refreshes in one browser tab and asserts the update lands in a second tab with no reload.
+- **Real-time via SignalR, not polling.** The frontend doesn't refetch on a timer to see if rates changed elsewhere — the backend pushes `RatesUpdated`/`AlertTriggered` to whichever browser tabs are viewing the affected watchlist. This is the actual "event-driven front-to-back" requirement, not just a buzzword: verified in `e2e/golden-path.spec.ts` with a test that refreshes in one browser tab and asserts the update lands in a second tab with no reload. The frontend has **zero** `setInterval`/`setTimeout` anywhere — every state change is either a direct result of a user action or a server-pushed event.
+- **Auto-refresh lives on the server, not as frontend polling.** `RateRefreshBackgroundService` (an `IHostedService`) ticks on a timer and calls the exact same `IRateService.RefreshAsync` that the "Refresh Rates" button calls — so a scheduled tick drives the identical `RatesRefreshedEvent` → alert evaluation → SignalR push pipeline as a manual refresh. This keeps the "self-refreshing app" requirement satisfied without contradicting "event-driven, not polling": one job refreshes for every connected client at once, instead of N browser tabs each independently asking "anything new?" on their own timers. Interval defaults to 5 minutes (configurable via `RateRefresh:IntervalMinutes`) — deliberately not shorter, since Frankfurter's underlying ECB reference rates only update once a day, so refreshing every 30 seconds would just re-fetch the same number.
 - **Manual FluentValidation, not the `FluentValidation.AspNetCore` auto-validation package.** That package's own maintainers recommend against MVC auto-validation (it has had correctness issues and is unmaintained for that use case). Instead, a small `ValidationFilter` (`IAsyncActionFilter`) resolves the right `IValidator<T>` per action argument and returns a `ValidationProblemDetails` on failure — same developer experience, no inherited footgun.
 - **Retry with backoff + a circuit breaker around the Frankfurter client, not a bare `HttpClient`.** `Microsoft.Extensions.Http.Resilience` (Polly) wraps the rate-provider `HttpClient`: transient failures (5xx, 408, timeouts, connection errors) get 3 retries with exponential backoff and jitter; a 400/404 for an unrecognized currency is *not* retried, since retrying won't fix a currency code that doesn't exist. A circuit breaker trips after repeated failures so a genuinely down upstream fails fast instead of every request individually waiting out its own retries. `FrankfurterRateProvider` itself needed zero changes — the policy lives entirely in the DI wiring (`AddFrankfurterResilience`), and `RateProviderResilienceTests.cs` proves it end-to-end against a scripted transport (retries-then-succeeds, exhausts-then-throws, and non-transient-doesn't-retry).
 - **One exception hierarchy, one place that maps it to HTTP.** Domain/Application code throws `NotFoundException`, `UnknownCurrencyException`, `RateProviderUnavailableException` — plain, testable exceptions with no HTTP knowledge. A single `GlobalExceptionHandler` (`IExceptionHandler`) is the only place that knows `NotFoundException` → 404, `UnknownCurrencyException` → 400, `RateProviderUnavailableException` → 502. Services and controllers stay free of `try/catch`-to-status-code boilerplate.
@@ -61,6 +63,7 @@ dotnet run
 - API: `http://localhost:5289`
 - Swagger UI: `http://localhost:5289/swagger`
 - A SQLite database (`currencywatchlist.db`) is created and migrated automatically on first run.
+- Every tracked pair refreshes automatically every 5 minutes (a background job, not frontend polling — see Design decisions). Override with the `RateRefresh__IntervalMinutes` environment variable (or `RateRefresh:IntervalMinutes` in `appsettings.json`), e.g. `RateRefresh__IntervalMinutes=1 dotnet run` to see it happen faster while testing.
 
 #### Frontend
 
@@ -80,13 +83,13 @@ Open `http://localhost:3000`. The backend must be running first (CORS is locked 
 Backend (from `backend/`):
 
 ```bash
-dotnet test --filter "Category!=Live"                        # 77 tests: unit (Application) + integration (Api, isolated SQLite + mocked rate provider + resilience pipeline)
+dotnet test --filter "Category!=Live"                        # 79 tests: unit (Application) + integration (Api, isolated SQLite + mocked rate provider + resilience pipeline + background refresh)
 dotnet test --filter "Category=Live"                         # 3 tests against the real api.frankfurter.app - no mocking (see below)
 dotnet test --collect:"XPlat Code Coverage" --filter "Category!=Live"   # produces coverage.cobertura.xml per project
 reportgenerator "-reports:**/coverage.cobertura.xml" "-targetdir:coverage-results/report" "-reporttypes:TextSummary"  # requires: dotnet tool install -g dotnet-reportgenerator-globaltool
 ```
 
-Current backend line coverage: **95.7%**.
+Current backend line coverage: **95.4%**.
 
 `FrankfurterLiveIntegrationTests` calls the real Frankfurter API with nothing mocked, to prove the HTTP client, JSON mapping, and resilience wiring genuinely work against the live service — not just our assumptions about its response shape. It's excluded from the default `dotnet test` run and from CI (`ci.yml` filters it out too) for the same reason the e2e suite isn't in CI: a real third-party network dependency is a source of flakiness CI shouldn't carry. Run it explicitly with the command above.
 
@@ -131,8 +134,8 @@ E2E (Playwright) isn't run in CI since it exercises the real Frankfurter API aga
 ## Future improvements
 
 - Authentication/authorization (per-user watchlists) and multi-tenancy.
-- A scheduled background job (e.g. `IHostedService` / Azure Function) to refresh rates automatically instead of only on button click or manual API call.
 - A fallback rate provider for when Frankfurter's circuit breaker is open.
+- Only auto-refresh pairs that someone is actually watching (active SignalR group members) or that have an active alert, instead of every distinct pair unconditionally — matters once the pair count is large enough for that to be wasted work, not at this app's scale.
 - Move alert evaluation for bulk refreshes off the request thread (a background queue) once refresh volume grows.
 - Soft-delete / audit trail on watchlists instead of hard delete, given `AlertEvent` history has real value.
 - E2E coverage for delete flows and the "provider unavailable" path (currently covered at the integration-test level with a mocked provider, not via Playwright).
