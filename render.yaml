@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: currency-watchlist-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/watchlists
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Development
+      # Updated to the real frontend URL once it's deployed (Render re-syncs env vars from
+      # this file on every push, so no manual dashboard edit is needed after that).
+      - key: Cors__AllowedOrigins__0
+        value: http://localhost:3000
