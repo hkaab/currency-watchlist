@@ -13,3 +13,7 @@ services:
         value: http://localhost:3000
       - key: Cors__AllowedOrigins__1
         value: https://currency-watchlist.vercel.app
+      # Faster than the app's 5-minute default, deliberately, so the live demo's
+      # auto-refresh is easy to actually watch happen on screen.
+      - key: RateRefresh__IntervalMinutes
+        value: "1"
