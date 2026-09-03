@@ -23,8 +23,12 @@ public class RateRefreshBackgroundService : BackgroundService
         _scopeFactory = scopeFactory;
         _logger = logger;
 
-        var minutes = configuration.GetValue<int?>("RateRefresh:IntervalMinutes") ?? 5;
-        _interval = TimeSpan.FromMinutes(minutes);
+        // IntervalSeconds is a finer-grained override for demo/testing use (e.g. watching it
+        // react on screen); IntervalMinutes is the normal, documented way to configure this.
+        var seconds = configuration.GetValue<int?>("RateRefresh:IntervalSeconds");
+        _interval = seconds.HasValue
+            ? TimeSpan.FromSeconds(seconds.Value)
+            : TimeSpan.FromMinutes(configuration.GetValue<int?>("RateRefresh:IntervalMinutes") ?? 5);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -34,10 +38,19 @@ public class RateRefreshBackgroundService : BackgroundService
         // Populate rates immediately on startup rather than leaving the app empty for a full interval.
         await RefreshAllAsync(stoppingToken);
 
-        using var timer = new PeriodicTimer(_interval);
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        try
         {
-            await RefreshAllAsync(stoppingToken);
+            using var timer = new PeriodicTimer(_interval);
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                await RefreshAllAsync(stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Expected on graceful shutdown - PeriodicTimer.WaitForNextTickAsync throws this when
+            // stoppingToken is cancelled. Left uncaught, BackgroundServiceExceptionBehavior's
+            // default (StopHost) would treat a normal shutdown as a fatal, host-stopping error.
         }
     }
 

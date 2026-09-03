@@ -14,6 +14,9 @@ services:
       - key: Cors__AllowedOrigins__1
         value: https://currency-watchlist.vercel.app
       # Faster than the app's 5-minute default, deliberately, so the live demo's
-      # auto-refresh is easy to actually watch happen on screen.
-      - key: RateRefresh__IntervalMinutes
-        value: "1"
+      # auto-refresh is easy to actually watch happen on screen. Not lower than this -
+      # Frankfurter is a free, unauthenticated public API and its underlying data doesn't
+      # change more often than daily anyway, so anything faster buys no real freshness,
+      # only extra load on a service we don't pay for.
+      - key: RateRefresh__IntervalSeconds
+        value: "15"
