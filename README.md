@@ -48,6 +48,8 @@ What's happening under the hood:
 - `frontend/Dockerfile` builds Next.js's standalone output on `node:22-alpine`. `NEXT_PUBLIC_API_BASE_URL` is a **build arg**, not just a runtime env var — Next.js inlines `NEXT_PUBLIC_*` values into the client bundle at build time, and since the browser (not the frontend container) calls the API directly, that value has to be the host-reachable address (`http://localhost:5289`), not an in-network service name.
 - `docker-compose.yml` wires both together; `Cors__AllowedOrigins__0` and `ConnectionStrings__Default` are overridden via environment variables using ASP.NET Core's `__` config-key convention.
 
+> **Not seeing a change you just pulled?** Compose doesn't detect source changes on its own — `docker compose up` alone reuses whatever image was last built. Always run `docker compose up --build` after pulling new code (add `--no-cache` to `docker compose build` if you suspect stale layers even with `--build`).
+
 Stop everything with `docker compose down` (add `-v` to also delete the SQLite volume).
 
 ### Without Docker
