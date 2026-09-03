@@ -70,4 +70,6 @@ export interface ProblemDetails {
   title?: string;
   detail?: string;
   status?: number;
+  /** Present on 400 responses from the validation filter - maps a request property name (e.g. "BaseCurrency") to its error messages. */
+  errors?: Record<string, string[]>;
 }

@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WatchlistDetailClient } from "./WatchlistDetailClient";
 import { useWatchlistDetail } from "@/hooks/useWatchlistDetail";
 import { useAlerts } from "@/hooks/useAlerts";
+import { renderWithToast } from "@/test-utils/renderWithToast";
 
 vi.mock("@/hooks/useWatchlistDetail", () => ({ useWatchlistDetail: vi.fn() }));
 vi.mock("@/hooks/useAlerts", () => ({ useAlerts: vi.fn() }));
@@ -45,7 +46,7 @@ describe("WatchlistDetailClient", () => {
   it("shows a loading state while the watchlist is loading", () => {
     mockHooks({ watchlist: null, isLoading: true });
 
-    render(<WatchlistDetailClient watchlistId={1} />);
+    renderWithToast(<WatchlistDetailClient watchlistId={1} />);
 
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
@@ -53,7 +54,7 @@ describe("WatchlistDetailClient", () => {
   it("shows an error banner when the watchlist failed to load", () => {
     mockHooks({ watchlist: null, isLoading: false, error: "Watchlist not found" });
 
-    render(<WatchlistDetailClient watchlistId={1} />);
+    renderWithToast(<WatchlistDetailClient watchlistId={1} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Watchlist not found");
   });
@@ -61,7 +62,7 @@ describe("WatchlistDetailClient", () => {
   it("renders the watchlist name and items once loaded", () => {
     mockHooks();
 
-    render(<WatchlistDetailClient watchlistId={1} />);
+    renderWithToast(<WatchlistDetailClient watchlistId={1} />);
 
     expect(screen.getByRole("heading", { name: "Travel" })).toBeInTheDocument();
     expect(screen.getAllByText("USD → AUD").length).toBeGreaterThan(0);
@@ -71,7 +72,7 @@ describe("WatchlistDetailClient", () => {
     const refresh = vi.fn().mockResolvedValue({ refreshedPairCount: 2, snapshots: [] });
     mockHooks({ refresh });
 
-    render(<WatchlistDetailClient watchlistId={1} />);
+    renderWithToast(<WatchlistDetailClient watchlistId={1} />);
     await userEvent.click(screen.getByRole("button", { name: "Refresh Rates" }));
 
     expect(refresh).toHaveBeenCalled();

@@ -43,6 +43,28 @@ describe("apiClient", () => {
     });
   });
 
+  it("prefers the specific field message(s) over the generic validation title", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            title: "One or more validation errors occurred.",
+            status: 400,
+            errors: { QuoteCurrency: ["'ZZZ' is not a currency the rate provider supports."] },
+          }),
+          { status: 400 },
+        ),
+      ),
+    );
+
+    await expect(apiClient.get("/api/watchlists/1/items")).rejects.toMatchObject({
+      message: "'ZZZ' is not a currency the rate provider supports.",
+      status: 400,
+      fieldErrors: { QuoteCurrency: ["'ZZZ' is not a currency the rate provider supports."] },
+    });
+  });
+
   it("falls back to a generic message when the error body isn't JSON", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("oops", { status: 500 })));
 

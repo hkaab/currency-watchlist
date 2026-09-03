@@ -2,15 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { ApiError } from "@/lib/api/client";
+import { useToast } from "@/components/common/ToastProvider";
 
 interface CreateWatchlistFormProps {
   onCreate: (name: string) => Promise<unknown>;
 }
 
 export function CreateWatchlistForm({ onCreate }: CreateWatchlistFormProps) {
+  const { showToast } = useToast();
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const trimmed = name.trim();
   const isValid = trimmed.length > 0 && trimmed.length <= 100;
@@ -22,12 +23,11 @@ export function CreateWatchlistForm({ onCreate }: CreateWatchlistFormProps) {
     }
 
     setIsSubmitting(true);
-    setError(null);
     try {
       await onCreate(trimmed);
       setName("");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create watchlist.");
+      showToast(err instanceof ApiError ? err.message : "Failed to create watchlist.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -48,7 +48,6 @@ export function CreateWatchlistForm({ onCreate }: CreateWatchlistFormProps) {
       <button type="submit" disabled={!isValid || isSubmitting}>
         {isSubmitting ? "Creating..." : "Create watchlist"}
       </button>
-      {error && <span className="field-error">{error}</span>}
     </form>
   );
 }

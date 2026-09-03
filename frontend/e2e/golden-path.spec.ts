@@ -92,4 +92,25 @@ test.describe("Currency watchlist golden path", () => {
     await page.getByLabel("Quote currency").fill("AUD");
     await expect(page.getByRole("button", { name: "Add pair" })).toBeDisabled();
   });
+
+  test("rejects a currency the rate provider doesn't support, with a toast and a highlighted field", async ({ page }) => {
+    const watchlistName = `Unsupported Currency Test ${Date.now()}`;
+
+    await page.goto("/");
+    await page.getByLabel("Watchlist name").fill(watchlistName);
+    await page.getByRole("button", { name: "Create watchlist" }).click();
+    await page.getByRole("link", { name: watchlistName }).click();
+    await expect(page.getByRole("heading", { name: watchlistName })).toBeVisible({ timeout: 20_000 });
+
+    // "ZZZ" passes client-side format validation (3 letters) but isn't a real currency -
+    // this must be caught server-side, against the real Frankfurter API (no mocking in e2e).
+    await page.getByLabel("Base currency").fill("USD");
+    await page.getByLabel("Quote currency").fill("ZZZ");
+    await page.getByRole("button", { name: "Add pair" }).click();
+
+    await expect(page.getByRole("alert").filter({ hasText: "ZZZ" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel("Quote currency")).toHaveClass(/invalid/);
+    await expect(page.getByLabel("Base currency")).not.toHaveClass(/invalid/);
+    await expect(page.getByRole("listitem").filter({ hasText: "USD → ZZZ" })).toHaveCount(0);
+  });
 });

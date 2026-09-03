@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ApiError } from "@/lib/api/client";
+import { useToast } from "@/components/common/ToastProvider";
 import type { AlertCondition, WatchlistItemResponse } from "@/lib/types";
 
 interface CreateAlertFormProps {
@@ -10,6 +11,7 @@ interface CreateAlertFormProps {
 }
 
 export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
+  const { showToast } = useToast();
   // null = no explicit choice yet; falls back to the first item below. Deriving the
   // effective selection during render (rather than syncing it via an effect) keeps it
   // correct even when items arrive or get removed after this form has already mounted.
@@ -22,7 +24,6 @@ export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
   const [condition, setCondition] = useState<AlertCondition>("Above");
   const [threshold, setThreshold] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const thresholdValue = Number(threshold);
   const isValid = watchlistItemId > 0 && threshold.trim().length > 0 && Number.isFinite(thresholdValue) && thresholdValue > 0;
@@ -38,12 +39,11 @@ export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
     }
 
     setIsSubmitting(true);
-    setError(null);
     try {
       await onCreate(watchlistItemId, condition, thresholdValue);
       setThreshold("");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create alert.");
+      showToast(err instanceof ApiError ? err.message : "Failed to create alert.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -91,7 +91,6 @@ export function CreateAlertForm({ items, onCreate }: CreateAlertFormProps) {
       <button type="submit" disabled={!isValid || isSubmitting}>
         {isSubmitting ? "Creating..." : "Create alert"}
       </button>
-      {error && <span className="field-error">{error}</span>}
     </form>
   );
 }

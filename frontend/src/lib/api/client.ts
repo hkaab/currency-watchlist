@@ -5,11 +5,14 @@ export const API_BASE_URL =
 
 export class ApiError extends Error {
   status: number;
+  /** Per-field messages from the validation filter (e.g. { BaseCurrency: ["..."] }), when present. */
+  fieldErrors?: Record<string, string[]>;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, fieldErrors?: Record<string, string[]>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -24,13 +27,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let fieldErrors: Record<string, string[]> | undefined;
     try {
       const problem = (await response.json()) as ProblemDetails;
-      message = problem.detail ?? problem.title ?? message;
+      fieldErrors = problem.errors;
+      // Prefer the actual field message(s) over the generic "One or more validation errors occurred." title.
+      const fieldMessages = fieldErrors && Object.values(fieldErrors).flat();
+      message = fieldMessages?.length ? fieldMessages.join(" ") : (problem.detail ?? problem.title ?? message);
     } catch {
       // response had no JSON body; keep the default message
     }
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, response.status, fieldErrors);
   }
 
   if (response.status === 204) {

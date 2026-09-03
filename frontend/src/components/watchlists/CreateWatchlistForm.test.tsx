@@ -1,12 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CreateWatchlistForm } from "./CreateWatchlistForm";
 import { ApiError } from "@/lib/api/client";
+import { renderWithToast } from "@/test-utils/renderWithToast";
 
 describe("CreateWatchlistForm", () => {
   it("disables submit until a name is entered", async () => {
-    render(<CreateWatchlistForm onCreate={vi.fn()} />);
+    renderWithToast(<CreateWatchlistForm onCreate={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "Create watchlist" })).toBeDisabled();
 
@@ -17,7 +18,7 @@ describe("CreateWatchlistForm", () => {
 
   it("calls onCreate with the trimmed name and clears the input on success", async () => {
     const onCreate = vi.fn().mockResolvedValue(undefined);
-    render(<CreateWatchlistForm onCreate={onCreate} />);
+    renderWithToast(<CreateWatchlistForm onCreate={onCreate} />);
 
     await userEvent.type(screen.getByLabelText("Watchlist name"), "  My List  ");
     await userEvent.click(screen.getByRole("button", { name: "Create watchlist" }));
@@ -26,13 +27,13 @@ describe("CreateWatchlistForm", () => {
     expect(screen.getByLabelText("Watchlist name")).toHaveValue("");
   });
 
-  it("shows the error message when creation fails", async () => {
+  it("shows a toast when creation fails", async () => {
     const onCreate = vi.fn().mockRejectedValue(new ApiError("Name already taken", 400));
-    render(<CreateWatchlistForm onCreate={onCreate} />);
+    renderWithToast(<CreateWatchlistForm onCreate={onCreate} />);
 
     await userEvent.type(screen.getByLabelText("Watchlist name"), "Duplicate");
     await userEvent.click(screen.getByRole("button", { name: "Create watchlist" }));
 
-    expect(await screen.findByText("Name already taken")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Name already taken");
   });
 });
