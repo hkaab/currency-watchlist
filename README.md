@@ -13,6 +13,15 @@ Create currency watchlists, track currency pairs, fetch live exchange rates from
 
 See [`docs/architecture.md`](docs/architecture.md) for two diagrams: this system, and how it would look at enterprise scale.
 
+## Live demo
+
+- **App**: https://currency-watchlist.vercel.app
+- **API / Swagger**: https://currency-watchlist-backend.onrender.com/swagger
+
+Deployed on free tiers (Vercel + Render) as a temporary demo, expected to stay up for about a week from 2026-09-03. Two things to expect:
+- **Cold starts**: Render's free tier spins the backend down after 15 minutes of inactivity — the first request after a quiet period can take 30–50 seconds to wake it back up.
+- **Ephemeral data**: the backend's SQLite file lives on the container's local disk, not a persistent volume (Render's free tier doesn't support one) — data can reset on a redeploy or restart. Fine for a demo, not for anything meant to last.
+
 ## Design decisions
 
 - **Clean Architecture, dependencies point inward.** `Domain` (entities, enums, domain event contracts) has zero dependencies. `Application` (services, DTOs, validators, repository/event interfaces) depends only on `Domain`. `Infrastructure` (EF Core, the Frankfurter HTTP client) implements Application's interfaces. `Api` is the composition root that wires concrete implementations into DI. Controllers depend on `Application` interfaces, never on EF Core or HttpClient directly — swapping SQLite for Postgres, or Frankfurter for another provider, touches `Infrastructure` only.
@@ -117,6 +126,14 @@ Current frontend line coverage: **94.7%** (unit). All four Playwright specs pass
 - **Badges job** (push to `main` only): reads both coverage numbers and commits updated badge JSON to `.github/badges/`, which the README badges above read live via shields.io's endpoint badge — no third-party coverage service or account needed.
 
 E2E (Playwright) isn't run in CI since it exercises the real Frankfurter API against two live dev servers — see "Tests" above to run it locally.
+
+### Deployment
+
+The [Live demo](#live-demo) above runs on:
+
+- **Backend → Render**, deployed from [`render.yaml`](render.yaml) (a Blueprint spec Render's dashboard detects automatically) — Docker runtime, free plan, health check on `/api/watchlists`. `backend/Dockerfile`'s entrypoint honors a platform-injected `$PORT` (the convention Render and most PaaS providers use) via `ASPNETCORE_HTTP_PORTS`, falling back to `8080` when it's unset so local `docker compose` usage is unaffected.
+- **Frontend → Vercel**, deployed via `vercel --prod --build-env NEXT_PUBLIC_API_BASE_URL=<render-url>` (that variable is inlined into the client bundle at build time — see the Docker section above for why it must be the real backend URL, not an internal one). Vercel's own build pipeline conflicts with `output: "standalone"` (it expects trace files that mode restructures) so `next.config.ts` skips that setting when `process.env.VERCEL` is set, which Vercel sets automatically during its build.
+- **CORS**: the backend's `Cors:AllowedOrigins` includes the deployed Vercel URL alongside `localhost:3000`, so the same backend serves both the local dev frontend and the deployed one.
 
 ## Assumptions
 
