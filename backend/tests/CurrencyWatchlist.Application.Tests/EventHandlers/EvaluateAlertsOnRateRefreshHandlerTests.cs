@@ -30,7 +30,8 @@ public class EvaluateAlertsOnRateRefreshHandlerTests
     {
         var item = new WatchlistItem { Id = 1, WatchlistId = 7, BaseCurrency = "USD", QuoteCurrency = "AUD" };
         var rule = new AlertRule { Id = 1, Condition = AlertCondition.Above, Threshold = 1.0m, IsActive = true, WatchlistItem = item };
-        _alertRules.GetActiveByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>()).Returns(new List<AlertRule> { rule });
+        _alertRules.GetActiveByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<AlertRule> { rule });
 
         var snapshot = new RateSnapshot { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m, FetchedAt = DateTime.UtcNow };
         await _sut.HandleAsync(new RatesRefreshedEvent([snapshot]), CancellationToken.None);
@@ -46,7 +47,8 @@ public class EvaluateAlertsOnRateRefreshHandlerTests
     {
         var item = new WatchlistItem { Id = 1, WatchlistId = 7, BaseCurrency = "USD", QuoteCurrency = "AUD" };
         var rule = new AlertRule { Id = 1, Condition = AlertCondition.Above, Threshold = 2.0m, IsActive = true, WatchlistItem = item };
-        _alertRules.GetActiveByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>()).Returns(new List<AlertRule> { rule });
+        _alertRules.GetActiveByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<AlertRule> { rule });
 
         var snapshot = new RateSnapshot { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m, FetchedAt = DateTime.UtcNow };
         await _sut.HandleAsync(new RatesRefreshedEvent([snapshot]), CancellationToken.None);
@@ -59,7 +61,8 @@ public class EvaluateAlertsOnRateRefreshHandlerTests
     [Fact]
     public async Task Deduplicates_multiple_snapshots_for_the_same_pair()
     {
-        _alertRules.GetActiveByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>()).Returns(new List<AlertRule>());
+        _alertRules.GetActiveByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<AlertRule>());
 
         var snapshots = new List<RateSnapshot>
         {
@@ -68,6 +71,25 @@ public class EvaluateAlertsOnRateRefreshHandlerTests
         };
         await _sut.HandleAsync(new RatesRefreshedEvent(snapshots), CancellationToken.None);
 
-        await _alertRules.Received(1).GetActiveByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>());
+        await _alertRules.Received(1).GetActiveByCurrencyPairsAsync(
+            Arg.Is<IReadOnlyCollection<(string, string)>>(p => p.Count == 1 && p.Any(x => x.Item1 == "USD" && x.Item2 == "AUD")),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Fetches_rules_in_a_single_batch_call_for_multiple_distinct_pairs()
+    {
+        _alertRules.GetActiveByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<AlertRule>());
+
+        var snapshots = new List<RateSnapshot>
+        {
+            new() { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m },
+            new() { BaseCurrency = "EUR", QuoteCurrency = "GBP", Rate = 0.85m }
+        };
+        await _sut.HandleAsync(new RatesRefreshedEvent(snapshots), CancellationToken.None);
+
+        await _alertRules.Received(1).GetActiveByCurrencyPairsAsync(
+            Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>());
     }
 }

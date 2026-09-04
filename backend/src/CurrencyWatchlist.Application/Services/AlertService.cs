@@ -76,9 +76,15 @@ public sealed class AlertService : IAlertService
         var rule = await _alertRules.GetByIdWithItemAsync(alertRuleId, cancellationToken)
             ?? throw new NotFoundException(nameof(AlertRule), alertRuleId);
 
+        if (!rule.IsActive)
+        {
+            throw new AlertRuleInactiveException(rule.Id);
+        }
+
         var item = rule.WatchlistItem!;
         var quotes = await _rateProvider.GetLatestRatesAsync(item.BaseCurrency, [item.QuoteCurrency], cancellationToken);
-        var quote = quotes.First();
+        var quote = quotes.FirstOrDefault()
+            ?? throw new RateProviderUnavailableException($"No rate was returned for {item.BaseCurrency}/{item.QuoteCurrency}.");
         var evaluatedAt = DateTime.UtcNow;
 
         _rateSnapshots.Add(new RateSnapshot

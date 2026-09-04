@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using CurrencyWatchlist.Application.Dtos.Items;
+using CurrencyWatchlist.Application.Dtos.Rates;
 using CurrencyWatchlist.Application.Dtos.Watchlists;
+using CurrencyWatchlist.Application.Interfaces;
 using FluentAssertions;
+using NSubstitute;
 
 namespace CurrencyWatchlist.Api.Tests;
 
@@ -79,5 +83,36 @@ public class WatchlistsEndpointTests : IDisposable
         var response = await _client.DeleteAsync("/api/watchlists/999");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetById_returns_the_correct_latest_rate_for_each_of_several_items()
+    {
+        // Exercises the batched GetLatestForPairsAsync EF Core query against real SQLite, not a
+        // mock - confirms the IN-clause-then-filter-in-memory translation actually returns the
+        // right snapshot per pair rather than mixing them up.
+        _factory.RateProviderFake
+            .GetLatestRatesAsync("USD", Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<RateQuote> { new("USD", "AUD", 1.5m, DateTime.UtcNow) });
+        _factory.RateProviderFake
+            .GetLatestRatesAsync("EUR", Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<RateQuote> { new("EUR", "GBP", 0.85m, DateTime.UtcNow) });
+
+        var createResponse = await _client.PostAsJsonAsync("/api/watchlists", new { name = "Multi Pair" }, JsonTestOptions.Default);
+        var watchlist = await createResponse.Content.ReadFromJsonAsync<WatchlistResponse>(JsonTestOptions.Default);
+
+        await _client.PostAsJsonAsync(
+            $"/api/watchlists/{watchlist!.Id}/items", new { baseCurrency = "USD", quoteCurrency = "AUD" }, JsonTestOptions.Default);
+        await _client.PostAsJsonAsync(
+            $"/api/watchlists/{watchlist.Id}/items", new { baseCurrency = "EUR", quoteCurrency = "GBP" }, JsonTestOptions.Default);
+        await _client.PostAsync($"/api/rates/refresh?watchlistId={watchlist.Id}", null);
+
+        var detailResponse = await _client.GetAsync($"/api/watchlists/{watchlist.Id}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<WatchlistDetailResponse>(JsonTestOptions.Default);
+
+        var usdAud = detail!.Items.Single(i => i.BaseCurrency == "USD");
+        var eurGbp = detail.Items.Single(i => i.BaseCurrency == "EUR");
+        usdAud.LatestRate!.Rate.Should().Be(1.5m);
+        eurGbp.LatestRate!.Rate.Should().Be(0.85m);
     }
 }

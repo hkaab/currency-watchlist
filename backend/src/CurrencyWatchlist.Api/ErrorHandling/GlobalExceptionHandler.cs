@@ -21,6 +21,8 @@ public class GlobalExceptionHandler : IExceptionHandler
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             UnknownCurrencyException => (StatusCodes.Status400BadRequest, "Invalid Currency"),
             RateProviderUnavailableException => (StatusCodes.Status502BadGateway, "Exchange Rate Provider Unavailable"),
+            AlertRuleInactiveException => (StatusCodes.Status409Conflict, "Alert Rule Inactive"),
+            DuplicateWatchlistItemException => (StatusCodes.Status409Conflict, "Duplicate Watchlist Item"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred")
         };
 

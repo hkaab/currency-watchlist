@@ -41,6 +41,7 @@ public class AlertsController : ControllerBase
     [HttpPost("{id:int}/evaluate")]
     [ProducesResponseType(typeof(AlertEvaluationResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<ActionResult<AlertEvaluationResult>> Evaluate(int id, CancellationToken cancellationToken) =>
         Ok(await _alertService.EvaluateAsync(id, cancellationToken));

@@ -66,6 +66,33 @@ public class AlertServiceTests
     }
 
     [Fact]
+    public async Task EvaluateAsync_throws_when_rule_is_inactive()
+    {
+        var item = new WatchlistItem { Id = 1, WatchlistId = 5, BaseCurrency = "USD", QuoteCurrency = "AUD" };
+        var rule = new AlertRule { Id = 1, Condition = AlertCondition.Above, Threshold = 1.0m, WatchlistItem = item, IsActive = false };
+        _alertRules.GetByIdWithItemAsync(1, Arg.Any<CancellationToken>()).Returns(rule);
+
+        var act = () => _sut.EvaluateAsync(1, CancellationToken.None);
+
+        await act.Should().ThrowAsync<AlertRuleInactiveException>();
+        await _rateProvider.DidNotReceive().GetLatestRatesAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_throws_when_provider_returns_no_quotes()
+    {
+        var item = new WatchlistItem { Id = 1, WatchlistId = 5, BaseCurrency = "USD", QuoteCurrency = "AUD" };
+        var rule = new AlertRule { Id = 1, Condition = AlertCondition.Above, Threshold = 1.0m, WatchlistItem = item };
+        _alertRules.GetByIdWithItemAsync(1, Arg.Any<CancellationToken>()).Returns(rule);
+        _rateProvider.GetLatestRatesAsync("USD", Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<RateQuote>());
+
+        var act = () => _sut.EvaluateAsync(1, CancellationToken.None);
+
+        await act.Should().ThrowAsync<RateProviderUnavailableException>();
+    }
+
+    [Fact]
     public async Task EvaluateAsync_persists_snapshot_but_not_alert_event_when_not_triggered()
     {
         var item = new WatchlistItem { Id = 1, WatchlistId = 5, BaseCurrency = "USD", QuoteCurrency = "AUD" };

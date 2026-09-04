@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using CurrencyWatchlist.Application.Common.Exceptions;
 using CurrencyWatchlist.Application.Interfaces;
 using Microsoft.Extensions.Logging;
+using Polly.CircuitBreaker;
 
 namespace CurrencyWatchlist.Infrastructure.ExternalServices;
 
@@ -44,6 +45,10 @@ public class FrankfurterRateProvider : IRateProvider
         catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
             throw new RateProviderUnavailableException("The exchange rate provider request timed out.", ex);
+        }
+        catch (BrokenCircuitException ex)
+        {
+            throw new RateProviderUnavailableException("The exchange rate provider is temporarily unavailable (circuit open).", ex);
         }
 
         if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest)

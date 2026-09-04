@@ -85,4 +85,39 @@ describe("useWatchlistDetail", () => {
 
     expect(result.current.watchlist?.items[0].latestRate).toEqual(snapshot);
   });
+
+  it("does not let a stale refresh response overwrite a newer already-applied rate", async () => {
+    vi.mocked(watchlistsApi.getById).mockResolvedValue(baseWatchlist);
+    const newer = {
+      id: 2,
+      baseCurrency: "USD",
+      quoteCurrency: "AUD",
+      rate: 1.6,
+      sourceTimestamp: "2026-01-03T00:00:00Z",
+      fetchedAt: "2026-01-03T00:00:00Z",
+    };
+    const stale = {
+      id: 1,
+      baseCurrency: "USD",
+      quoteCurrency: "AUD",
+      rate: 1.4,
+      sourceTimestamp: "2026-01-01T00:00:00Z",
+      fetchedAt: "2026-01-01T00:00:00Z",
+    };
+    vi.mocked(ratesApi.refresh)
+      .mockResolvedValueOnce({ refreshedPairCount: 1, snapshots: [newer] })
+      .mockResolvedValueOnce({ refreshedPairCount: 1, snapshots: [stale] });
+
+    const { result } = renderHook(() => useWatchlistDetail(1));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.watchlist?.items[0].latestRate).toEqual(newer);
+  });
 });

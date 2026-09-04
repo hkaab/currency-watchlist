@@ -38,11 +38,21 @@ public sealed class EvaluateAlertsOnRateRefreshHandler : IDomainEventHandler<Rat
 
         var distinctPairs = domainEvent.Snapshots
             .GroupBy(s => (s.BaseCurrency, s.QuoteCurrency))
-            .Select(g => g.Last());
+            .Select(g => g.Last())
+            .ToList();
+
+        var pairs = distinctPairs.Select(s => (s.BaseCurrency, s.QuoteCurrency)).ToList();
+        var activeRules = await _alertRules.GetActiveByCurrencyPairsAsync(pairs, cancellationToken);
+        var rulesByPair = activeRules
+            .GroupBy(r => (r.WatchlistItem!.BaseCurrency, r.WatchlistItem.QuoteCurrency))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         foreach (var snapshot in distinctPairs)
         {
-            var rules = await _alertRules.GetActiveByCurrencyPairAsync(snapshot.BaseCurrency, snapshot.QuoteCurrency, cancellationToken);
+            if (!rulesByPair.TryGetValue((snapshot.BaseCurrency, snapshot.QuoteCurrency), out var rules))
+            {
+                continue;
+            }
 
             foreach (var rule in rules)
             {

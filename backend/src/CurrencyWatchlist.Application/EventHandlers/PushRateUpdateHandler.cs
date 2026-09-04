@@ -19,13 +19,22 @@ public sealed class PushRateUpdateHandler : IDomainEventHandler<RatesRefreshedEv
 
     public async Task HandleAsync(RatesRefreshedEvent domainEvent, CancellationToken cancellationToken)
     {
+        var pairs = domainEvent.Snapshots.Select(s => (s.BaseCurrency, s.QuoteCurrency)).Distinct().ToList();
+        var items = await _items.GetByCurrencyPairsAsync(pairs, cancellationToken);
+        var watchlistIdsByPair = items
+            .GroupBy(i => (i.BaseCurrency, i.QuoteCurrency))
+            .ToDictionary(g => g.Key, g => g.Select(i => i.WatchlistId).Distinct().ToList());
+
         var snapshotsByWatchlist = new Dictionary<int, List<RateSnapshot>>();
 
         foreach (var snapshot in domainEvent.Snapshots)
         {
-            var items = await _items.GetByCurrencyPairAsync(snapshot.BaseCurrency, snapshot.QuoteCurrency, cancellationToken);
+            if (!watchlistIdsByPair.TryGetValue((snapshot.BaseCurrency, snapshot.QuoteCurrency), out var watchlistIds))
+            {
+                continue;
+            }
 
-            foreach (var watchlistId in items.Select(i => i.WatchlistId).Distinct())
+            foreach (var watchlistId in watchlistIds)
             {
                 if (!snapshotsByWatchlist.TryGetValue(watchlistId, out var list))
                 {

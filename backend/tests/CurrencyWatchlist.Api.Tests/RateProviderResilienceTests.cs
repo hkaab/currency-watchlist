@@ -59,6 +59,23 @@ public class RateProviderResilienceTests
     }
 
     [Fact]
+    public async Task Open_circuit_breaker_surfaces_as_RateProviderUnavailableException_not_a_raw_Polly_type()
+    {
+        var (provider, handler) = CreateResilientProvider(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+
+        // First call exhausts its retries (4 attempts, all failing) - enough on its own to trip the
+        // breaker (MinimumThroughput: 4, FailureRatio: 0.5) so the second call is short-circuited.
+        await provider.Invoking(p => p.GetLatestRatesAsync("USD", ["AUD"], CancellationToken.None))
+            .Should().ThrowAsync<RateProviderUnavailableException>();
+        var callsAfterFirstAttempt = handler.CallCount;
+
+        var act = () => provider.GetLatestRatesAsync("USD", ["AUD"], CancellationToken.None);
+
+        await act.Should().ThrowAsync<RateProviderUnavailableException>();
+        handler.CallCount.Should().Be(callsAfterFirstAttempt, "an open circuit should short-circuit before reaching the transport");
+    }
+
+    [Fact]
     public async Task Does_not_retry_a_non_transient_unknown_currency_response()
     {
         var (provider, handler) = CreateResilientProvider(new HttpResponseMessage(HttpStatusCode.NotFound));

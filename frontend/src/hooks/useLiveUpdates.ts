@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import {
   ensureConnectionStarted,
   getNotificationsConnection,
+  joinWatchlistGroup,
+  leaveWatchlistGroup,
 } from "@/lib/signalr/connection";
 import type { AlertTriggeredMessage, RateSnapshotResponse } from "@/lib/types";
 
@@ -32,7 +34,7 @@ export function useLiveUpdates(
     }
 
     const connection = getNotificationsConnection();
-    let joined = false;
+    let cancelled = false;
 
     const handleRatesUpdated = (snapshots: RateSnapshotResponse[]) => {
       optionsRef.current.onRatesUpdated?.(snapshots);
@@ -45,20 +47,23 @@ export function useLiveUpdates(
     connection.on("AlertTriggered", handleAlertTriggered);
 
     ensureConnectionStarted()
-      .then(() => connection.invoke("JoinWatchlist", watchlistId))
       .then(() => {
-        joined = true;
+        if (cancelled) {
+          return;
+        }
+        return joinWatchlistGroup(watchlistId);
       })
       .catch((error) => {
         console.error("Live updates unavailable:", error);
       });
 
     return () => {
+      cancelled = true;
       connection.off("RatesUpdated", handleRatesUpdated);
       connection.off("AlertTriggered", handleAlertTriggered);
-      if (joined) {
-        connection.invoke("LeaveWatchlist", watchlistId).catch(() => {});
-      }
+      // Safe to call even if the join above never resolved - leaving a group you were never
+      // added to (or a still-pending join that lands after this) is a harmless no-op server-side.
+      leaveWatchlistGroup(watchlistId).catch(() => {});
     };
   }, [watchlistId]);
 }

@@ -57,6 +57,19 @@ public class WatchlistItemsEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Add_item_duplicating_an_existing_pair_on_the_watchlist_returns_409()
+    {
+        var watchlist = await CreateWatchlistAsync("Items List");
+        await _client.PostAsJsonAsync(
+            $"/api/watchlists/{watchlist.Id}/items", new { baseCurrency = "USD", quoteCurrency = "AUD" }, JsonTestOptions.Default);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/watchlists/{watchlist.Id}/items", new { baseCurrency = "usd", quoteCurrency = "aud" }, JsonTestOptions.Default);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task Add_item_to_missing_watchlist_returns_404()
     {
         var response = await _client.PostAsJsonAsync(

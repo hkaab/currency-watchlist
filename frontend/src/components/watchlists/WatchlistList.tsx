@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ApiError } from "@/lib/api/client";
+import { useToast } from "@/components/common/ToastProvider";
 import type { WatchlistResponse } from "@/lib/types";
 
 interface WatchlistListProps {
@@ -10,6 +12,7 @@ interface WatchlistListProps {
 }
 
 export function WatchlistList({ watchlists, onDelete }: WatchlistListProps) {
+  const { showToast } = useToast();
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   if (watchlists.length === 0) {
@@ -20,6 +23,8 @@ export function WatchlistList({ watchlists, onDelete }: WatchlistListProps) {
     setDeletingId(id);
     try {
       await onDelete(id);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Failed to delete watchlist.");
     } finally {
       setDeletingId(null);
     }

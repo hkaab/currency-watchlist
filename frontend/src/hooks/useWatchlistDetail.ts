@@ -50,7 +50,18 @@ export function useWatchlistDetail(watchlistId: number) {
           const match = snapshots.find(
             (s) => s.baseCurrency === item.baseCurrency && s.quoteCurrency === item.quoteCurrency,
           );
-          return match ? { ...item, latestRate: match } : item;
+          if (!match) {
+            return item;
+          }
+          // A manual refresh's HTTP response and a SignalR push can land out of order (e.g. a
+          // refresh from a stale request resolving after a newer push already arrived) - only
+          // apply the match if it's not older than what's already shown, using fetchedAt (when
+          // our backend stored it) rather than sourceTimestamp (which is often just a date and
+          // can tie between successive refreshes of the same day's rate).
+          if (item.latestRate && new Date(match.fetchedAt) <= new Date(item.latestRate.fetchedAt)) {
+            return item;
+          }
+          return { ...item, latestRate: match };
         }),
       };
     });

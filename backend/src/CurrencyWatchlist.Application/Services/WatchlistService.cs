@@ -52,11 +52,13 @@ public sealed class WatchlistService : IWatchlistService
         var watchlist = await _watchlists.GetByIdWithItemsAsync(id, cancellationToken)
             ?? throw new NotFoundException(nameof(Watchlist), id);
 
-        var latestRates = new Dictionary<int, RateSnapshot?>();
-        foreach (var item in watchlist.Items)
-        {
-            latestRates[item.Id] = await _rateSnapshots.GetLatestAsync(item.BaseCurrency, item.QuoteCurrency, cancellationToken);
-        }
+        var pairs = watchlist.Items.Select(i => (i.BaseCurrency, i.QuoteCurrency)).Distinct().ToList();
+        var snapshots = await _rateSnapshots.GetLatestForPairsAsync(pairs, cancellationToken);
+        var snapshotsByPair = snapshots.ToDictionary(s => (s.BaseCurrency, s.QuoteCurrency));
+
+        var latestRates = watchlist.Items.ToDictionary(
+            i => i.Id,
+            i => snapshotsByPair.GetValueOrDefault((i.BaseCurrency, i.QuoteCurrency)));
 
         return watchlist.ToDetailResponse(latestRates);
     }

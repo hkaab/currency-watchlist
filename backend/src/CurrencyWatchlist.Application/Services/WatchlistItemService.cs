@@ -34,16 +34,42 @@ public sealed class WatchlistItemService : IWatchlistItemService
         _ = await _watchlists.GetByIdAsync(watchlistId, cancellationToken)
             ?? throw new NotFoundException(nameof(Watchlist), watchlistId);
 
+        var baseCurrency = request.BaseCurrency.Trim().ToUpperInvariant();
+        var quoteCurrency = request.QuoteCurrency.Trim().ToUpperInvariant();
+
+        if (await _items.ExistsAsync(watchlistId, baseCurrency, quoteCurrency, cancellationToken))
+        {
+            throw new DuplicateWatchlistItemException(baseCurrency, quoteCurrency);
+        }
+
         var item = new WatchlistItem
         {
             WatchlistId = watchlistId,
-            BaseCurrency = request.BaseCurrency.Trim().ToUpperInvariant(),
-            QuoteCurrency = request.QuoteCurrency.Trim().ToUpperInvariant(),
+            BaseCurrency = baseCurrency,
+            QuoteCurrency = quoteCurrency,
             CreatedAt = DateTime.UtcNow
         };
 
         _items.Add(item);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Backstop for the race between the ExistsAsync check above and this save: a
+            // concurrent request for the same pair can slip past the check and hit the
+            // unique index (WatchlistId, BaseCurrency, QuoteCurrency) first. We don't depend
+            // on the persistence provider's exception type here (Application has no EF Core
+            // reference) - if the pair now exists, that's what happened; otherwise rethrow.
+            if (await _items.ExistsAsync(watchlistId, baseCurrency, quoteCurrency, cancellationToken))
+            {
+                throw new DuplicateWatchlistItemException(baseCurrency, quoteCurrency);
+            }
+
+            throw;
+        }
 
         _logger.LogInformation(
             "Added item {ItemId} ({Base}/{Quote}) to watchlist {WatchlistId}",

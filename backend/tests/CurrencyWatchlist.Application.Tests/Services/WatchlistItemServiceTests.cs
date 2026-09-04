@@ -48,6 +48,42 @@ public class WatchlistItemServiceTests
     }
 
     [Fact]
+    public async Task AddItemAsync_throws_Duplicate_when_pair_already_exists_on_the_watchlist()
+    {
+        _watchlists.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Watchlist { Id = 1 });
+        _items.ExistsAsync(1, "USD", "AUD", Arg.Any<CancellationToken>()).Returns(true);
+
+        var act = () => _sut.AddItemAsync(1, new CreateWatchlistItemRequest("usd", "aud"), CancellationToken.None);
+
+        await act.Should().ThrowAsync<DuplicateWatchlistItemException>();
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddItemAsync_throws_Duplicate_when_save_fails_due_to_concurrent_insert()
+    {
+        _watchlists.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Watchlist { Id = 1 });
+        _items.ExistsAsync(1, "USD", "AUD", Arg.Any<CancellationToken>()).Returns(false, true);
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns<Task<int>>(_ => throw new InvalidOperationException("unique constraint violation"));
+
+        var act = () => _sut.AddItemAsync(1, new CreateWatchlistItemRequest("usd", "aud"), CancellationToken.None);
+
+        await act.Should().ThrowAsync<DuplicateWatchlistItemException>();
+    }
+
+    [Fact]
+    public async Task AddItemAsync_rethrows_original_error_when_save_fails_for_an_unrelated_reason()
+    {
+        _watchlists.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(new Watchlist { Id = 1 });
+        _items.ExistsAsync(1, "USD", "AUD", Arg.Any<CancellationToken>()).Returns(false);
+        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns<Task<int>>(_ => throw new InvalidOperationException("database unavailable"));
+
+        var act = () => _sut.AddItemAsync(1, new CreateWatchlistItemRequest("usd", "aud"), CancellationToken.None);
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("database unavailable");
+    }
+
+    [Fact]
     public async Task RemoveItemAsync_throws_NotFound_when_missing()
     {
         _items.GetByIdInWatchlistAsync(1, 2, Arg.Any<CancellationToken>()).Returns((WatchlistItem?)null);

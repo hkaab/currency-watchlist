@@ -22,6 +22,7 @@ public class WatchlistItemsController : ControllerBase
     [ProducesResponseType(typeof(WatchlistItemResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<WatchlistItemResponse>> Add(
         int watchlistId, [FromBody] CreateWatchlistItemRequest request, CancellationToken cancellationToken)
     {

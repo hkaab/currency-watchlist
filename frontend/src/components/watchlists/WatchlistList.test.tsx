@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WatchlistList } from "./WatchlistList";
+import { renderWithToast } from "@/test-utils/renderWithToast";
 import type { WatchlistResponse } from "@/lib/types";
 
 const watchlists: WatchlistResponse[] = [
@@ -11,13 +12,13 @@ const watchlists: WatchlistResponse[] = [
 
 describe("WatchlistList", () => {
   it("shows an empty state when there are no watchlists", () => {
-    render(<WatchlistList watchlists={[]} onDelete={vi.fn()} />);
+    renderWithToast(<WatchlistList watchlists={[]} onDelete={vi.fn()} />);
 
     expect(screen.getByText(/No watchlists yet/)).toBeInTheDocument();
   });
 
   it("renders a link and item count for each watchlist", () => {
-    render(<WatchlistList watchlists={watchlists} onDelete={vi.fn()} />);
+    renderWithToast(<WatchlistList watchlists={watchlists} onDelete={vi.fn()} />);
 
     expect(screen.getByRole("link", { name: "Travel Money" })).toHaveAttribute(
       "href",
@@ -29,11 +30,21 @@ describe("WatchlistList", () => {
 
   it("calls onDelete with the watchlist id when Delete is clicked", async () => {
     const onDelete = vi.fn().mockResolvedValue(undefined);
-    render(<WatchlistList watchlists={watchlists} onDelete={onDelete} />);
+    renderWithToast(<WatchlistList watchlists={watchlists} onDelete={onDelete} />);
 
     const [firstDeleteButton] = screen.getAllByRole("button", { name: /Delete/ });
     await userEvent.click(firstDeleteButton);
 
     expect(onDelete).toHaveBeenCalledWith(1);
+  });
+
+  it("shows a toast instead of an unhandled rejection when onDelete fails", async () => {
+    const onDelete = vi.fn().mockRejectedValue(new Error("boom"));
+    renderWithToast(<WatchlistList watchlists={watchlists} onDelete={onDelete} />);
+
+    const [firstDeleteButton] = screen.getAllByRole("button", { name: /Delete/ });
+    await userEvent.click(firstDeleteButton);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Failed to delete watchlist.");
   });
 });

@@ -97,25 +97,25 @@ Open `http://localhost:3000`. The backend must be running first (CORS is locked 
 Backend (from `backend/`):
 
 ```bash
-dotnet test --filter "Category!=Live"                        # 85 tests: unit (Application) + integration (Api, isolated SQLite + mocked rate provider + resilience pipeline + background refresh)
+dotnet test --filter "Category!=Live"                        # 98 tests: unit (Application) + integration (Api, isolated SQLite + mocked rate provider + resilience pipeline + background refresh)
 dotnet test --filter "Category=Live"                         # 5 tests against the real api.frankfurter.app - no mocking (see below)
 dotnet test --collect:"XPlat Code Coverage" --filter "Category!=Live"   # produces coverage.cobertura.xml per project
 reportgenerator "-reports:**/coverage.cobertura.xml" "-targetdir:coverage-results/report" "-reporttypes:TextSummary"  # requires: dotnet tool install -g dotnet-reportgenerator-globaltool
 ```
 
-Current backend line coverage: **95.2%**.
+Current backend line coverage: see the coverage badge above — it's regenerated from CI on every push, so it won't drift the way a number frozen in prose would.
 
 `FrankfurterLiveIntegrationTests` calls the real Frankfurter API with nothing mocked, to prove the HTTP client, JSON mapping, and resilience wiring genuinely work against the live service — not just our assumptions about its response shape. It's excluded from the default `dotnet test` run and from CI (`ci.yml` filters it out too) for the same reason the e2e suite isn't in CI: a real third-party network dependency is a source of flakiness CI shouldn't carry. Run it explicitly with the command above.
 
 Frontend (from `frontend/`):
 
 ```bash
-npm test              # Vitest + React Testing Library (81 tests)
+npm test              # Vitest + React Testing Library (91 tests)
 npm run test:coverage  # coverage report
 npm run test:e2e       # Playwright, against the real backend + frontend dev servers (both must be running)
 ```
 
-Current frontend line coverage: **94.7%** (unit). All four Playwright specs pass against the live stack: the golden path, a two-tab test confirming a rate refresh in one tab pushes live to another tab via SignalR, client-side format validation, and a server-side "currency not supported" rejection (real Frankfurter call, no mocking) that checks the toast text, the highlighted field, and that no item was actually added.
+Current frontend line coverage: see the coverage badge above — same reasoning as the backend: a number frozen in prose here would just go stale again next time a test's added. All four Playwright specs pass against the live stack: the golden path, a two-tab test confirming a rate refresh in one tab pushes live to another tab via SignalR, client-side format validation, and a server-side "currency not supported" rejection (real Frankfurter call, no mocking) that checks the toast text, the highlighted field, and that no item was actually added.
 
 ### CI/CD
 

@@ -21,11 +21,14 @@ public class PushRateUpdateHandlerTests
     [Fact]
     public async Task Notifies_every_watchlist_referencing_the_refreshed_pair()
     {
-        _items.GetByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>()).Returns(new List<WatchlistItem>
-        {
-            new() { WatchlistId = 1 },
-            new() { WatchlistId = 2 }
-        });
+        _items.GetByCurrencyPairsAsync(
+                Arg.Is<IReadOnlyCollection<(string, string)>>(p => p.Any(x => x.Item1 == "USD" && x.Item2 == "AUD")),
+                Arg.Any<CancellationToken>())
+            .Returns(new List<WatchlistItem>
+            {
+                new() { BaseCurrency = "USD", QuoteCurrency = "AUD", WatchlistId = 1 },
+                new() { BaseCurrency = "USD", QuoteCurrency = "AUD", WatchlistId = 2 }
+            });
 
         var snapshot = new RateSnapshot { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m };
         await _sut.HandleAsync(new RatesRefreshedEvent([snapshot]), CancellationToken.None);
@@ -37,11 +40,32 @@ public class PushRateUpdateHandlerTests
     [Fact]
     public async Task No_watchlists_reference_pair_means_no_notification()
     {
-        _items.GetByCurrencyPairAsync("USD", "AUD", Arg.Any<CancellationToken>()).Returns(new List<WatchlistItem>());
+        _items.GetByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<WatchlistItem>());
 
         var snapshot = new RateSnapshot { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m };
         await _sut.HandleAsync(new RatesRefreshedEvent([snapshot]), CancellationToken.None);
 
         await _notifier.DidNotReceive().NotifyRatesUpdatedAsync(Arg.Any<int>(), Arg.Any<IReadOnlyList<RateSnapshot>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Fetches_items_in_a_single_batch_call_regardless_of_snapshot_count()
+    {
+        _items.GetByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<WatchlistItem>
+            {
+                new() { BaseCurrency = "USD", QuoteCurrency = "AUD", WatchlistId = 1 },
+                new() { BaseCurrency = "EUR", QuoteCurrency = "GBP", WatchlistId = 2 }
+            });
+
+        var snapshots = new List<RateSnapshot>
+        {
+            new() { BaseCurrency = "USD", QuoteCurrency = "AUD", Rate = 1.5m },
+            new() { BaseCurrency = "EUR", QuoteCurrency = "GBP", Rate = 0.85m }
+        };
+        await _sut.HandleAsync(new RatesRefreshedEvent(snapshots), CancellationToken.None);
+
+        await _items.Received(1).GetByCurrencyPairsAsync(Arg.Any<IReadOnlyCollection<(string, string)>>(), Arg.Any<CancellationToken>());
     }
 }

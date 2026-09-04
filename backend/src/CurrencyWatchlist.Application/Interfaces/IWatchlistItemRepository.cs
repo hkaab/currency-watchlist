@@ -8,7 +8,10 @@ public interface IWatchlistItemRepository
     Task<WatchlistItem?> GetByIdInWatchlistAsync(int watchlistId, int itemId, CancellationToken cancellationToken);
     Task<IReadOnlyList<WatchlistItem>> GetAllAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<WatchlistItem>> GetByWatchlistIdAsync(int watchlistId, CancellationToken cancellationToken);
-    Task<IReadOnlyList<WatchlistItem>> GetByCurrencyPairAsync(string baseCurrency, string quoteCurrency, CancellationToken cancellationToken);
+    /// <summary>Items across all watchlists matching any of the given pairs, in one round trip.</summary>
+    Task<IReadOnlyList<WatchlistItem>> GetByCurrencyPairsAsync(
+        IReadOnlyCollection<(string BaseCurrency, string QuoteCurrency)> pairs, CancellationToken cancellationToken);
+    Task<bool> ExistsAsync(int watchlistId, string baseCurrency, string quoteCurrency, CancellationToken cancellationToken);
     void Add(WatchlistItem item);
     void Remove(WatchlistItem item);
 }

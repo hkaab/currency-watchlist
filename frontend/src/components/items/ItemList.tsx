@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ApiError } from "@/lib/api/client";
+import { useToast } from "@/components/common/ToastProvider";
 import type { WatchlistItemResponse } from "@/lib/types";
 
 interface ItemListProps {
@@ -11,6 +13,7 @@ interface ItemListProps {
 }
 
 export function ItemList({ items, selectedItemId, onSelect, onRemove }: ItemListProps) {
+  const { showToast } = useToast();
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   if (items.length === 0) {
@@ -21,6 +24,8 @@ export function ItemList({ items, selectedItemId, onSelect, onRemove }: ItemList
     setRemovingId(itemId);
     try {
       await onRemove(itemId);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Failed to remove item.");
     } finally {
       setRemovingId(null);
     }

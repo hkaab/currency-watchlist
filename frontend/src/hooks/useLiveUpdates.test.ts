@@ -1,12 +1,26 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLiveUpdates } from "./useLiveUpdates";
-import { ensureConnectionStarted, getNotificationsConnection } from "@/lib/signalr/connection";
+import {
+  ensureConnectionStarted,
+  getNotificationsConnection,
+  joinWatchlistGroup,
+  leaveWatchlistGroup,
+} from "@/lib/signalr/connection";
 
 vi.mock("@/lib/signalr/connection", () => ({
   getNotificationsConnection: vi.fn(),
   ensureConnectionStarted: vi.fn(),
+  joinWatchlistGroup: vi.fn(),
+  leaveWatchlistGroup: vi.fn(),
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Every effect cleanup calls this - default it so tests that don't care about leaving
+  // don't have to configure it, and so call counts start clean per test.
+  vi.mocked(leaveWatchlistGroup).mockResolvedValue(undefined);
+});
 
 function createFakeConnection() {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
@@ -25,11 +39,12 @@ describe("useLiveUpdates", () => {
     const connection = createFakeConnection();
     vi.mocked(getNotificationsConnection).mockReturnValue(connection as never);
     vi.mocked(ensureConnectionStarted).mockResolvedValue(undefined);
+    vi.mocked(joinWatchlistGroup).mockResolvedValue(undefined);
 
     const onRatesUpdated = vi.fn();
     renderHook(() => useLiveUpdates(1, { onRatesUpdated }));
 
-    await waitFor(() => expect(connection.invoke).toHaveBeenCalledWith("JoinWatchlist", 1));
+    await waitFor(() => expect(joinWatchlistGroup).toHaveBeenCalledWith(1));
 
     connection.trigger("RatesUpdated", [{ rate: 1.5 }]);
     expect(onRatesUpdated).toHaveBeenCalledWith([{ rate: 1.5 }]);
@@ -48,13 +63,36 @@ describe("useLiveUpdates", () => {
     const connection = createFakeConnection();
     vi.mocked(getNotificationsConnection).mockReturnValue(connection as never);
     vi.mocked(ensureConnectionStarted).mockResolvedValue(undefined);
+    vi.mocked(joinWatchlistGroup).mockResolvedValue(undefined);
+    vi.mocked(leaveWatchlistGroup).mockResolvedValue(undefined);
 
     const { unmount } = renderHook(() => useLiveUpdates(1, {}));
-    await waitFor(() => expect(connection.invoke).toHaveBeenCalledWith("JoinWatchlist", 1));
+    await waitFor(() => expect(joinWatchlistGroup).toHaveBeenCalledWith(1));
 
     unmount();
 
     expect(connection.off).toHaveBeenCalledWith("RatesUpdated", expect.any(Function));
-    expect(connection.invoke).toHaveBeenCalledWith("LeaveWatchlist", 1);
+    expect(leaveWatchlistGroup).toHaveBeenCalledWith(1);
+  });
+
+  it("does not join after unmount when the connection resolves after cleanup", async () => {
+    const connection = createFakeConnection();
+    vi.mocked(getNotificationsConnection).mockReturnValue(connection as never);
+    let resolveStart: () => void = () => {};
+    vi.mocked(ensureConnectionStarted).mockReturnValue(
+      new Promise((resolve) => {
+        resolveStart = resolve;
+      }),
+    );
+    vi.mocked(joinWatchlistGroup).mockResolvedValue(undefined);
+    vi.mocked(leaveWatchlistGroup).mockResolvedValue(undefined);
+
+    const { unmount } = renderHook(() => useLiveUpdates(1, {}));
+    unmount();
+    resolveStart();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(joinWatchlistGroup).not.toHaveBeenCalled();
   });
 });
