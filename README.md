@@ -11,7 +11,7 @@ Create currency watchlists, track currency pairs, fetch live exchange rates from
 - **Event-driven, front-to-back**: the backend publishes in-process domain events (`RatesRefreshedEvent`, `AlertTriggeredEvent`) that drive alert evaluation and push live updates to the frontend over SignalR; the frontend subscribes and updates the UI reactively.
 - **Self-refreshing**: a scheduled background job refreshes every tracked currency pair every 5 minutes (configurable) — rates and alerts stay current without anyone clicking "Refresh Rates."
 
-See [`docs/architecture.md`](docs/architecture.md) for two diagrams: this system, and how it would look at enterprise scale.
+See [`docs/architecture.md`](docs/architecture.md) for three diagrams: this system, a sequence diagram of a refresh triggering an alert and pushing live to every open tab, and how it would look at enterprise scale.
 
 ## Live demo
 

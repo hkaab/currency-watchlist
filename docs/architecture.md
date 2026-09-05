@@ -40,6 +40,53 @@ flowchart TB
 
 **Why this shape:** the frontend and backend are event-driven without needing external infrastructure — an in-process publisher/handler pair inside the API drives the alert-evaluation workflow, and the same events are relayed live to any browser tab viewing the affected watchlist via SignalR, instead of the UI polling for changes. See the root README for the tradeoffs behind this choice (and why not MediatR/a message broker at this scale).
 
+### Sequence: a refresh triggers an alert, pushed live to every open tab
+
+One request (`POST /api/rates/refresh`) fans out through the event pipeline above and reaches a second, completely passive browser tab without it ever polling.
+
+```mermaid
+sequenceDiagram
+    actor User as User (Tab A)
+    participant TabA as Browser · Tab A
+    participant Api as RateService
+    participant Fx as Frankfurter API
+    participant DB as SQLite
+    participant Pub as Event Publisher
+    participant Eval as EvaluateAlertsOnRateRefreshHandler
+    participant Push as PushRateUpdateHandler /<br/>PushAlertNotificationHandler
+    participant Hub as SignalR Hub
+    participant TabB as Browser · Tab B<br/>(same watchlist, idle)
+
+    User->>TabA: Click "Refresh Rates"
+    TabA->>Api: POST /api/rates/refresh?watchlistId=1
+    Api->>Fx: GET /latest?from=USD&to=AUD,EUR
+    Fx-->>Api: latest rates
+    Api->>DB: save RateSnapshot(s)
+    Api-->>TabA: 200 OK (refreshed snapshots)
+    Api->>Pub: publish RatesRefreshedEvent
+
+    Pub->>Eval: HandleAsync(RatesRefreshedEvent)
+    Eval->>DB: load active AlertRules for the refreshed pairs
+    alt threshold crossed
+        Eval->>DB: save AlertEvent
+        Eval->>Pub: publish AlertTriggeredEvent
+    end
+
+    Pub->>Push: HandleAsync(RatesRefreshedEvent)
+    Push->>Hub: NotifyRatesUpdatedAsync(watchlistId, snapshots)
+    Hub-->>TabA: RatesUpdated (WebSocket push)
+    Hub-->>TabB: RatesUpdated (WebSocket push)
+
+    opt an alert was triggered
+        Pub->>Push: HandleAsync(AlertTriggeredEvent)
+        Push->>Hub: NotifyAlertTriggeredAsync(watchlistId, alertEvent)
+        Hub-->>TabA: AlertTriggered (WebSocket push)
+        Hub-->>TabB: AlertTriggered (WebSocket push)
+    end
+
+    Note over TabB: Tab B took no action and made no request -<br/>it just received the live push.
+```
+
 ## 2. Real-world, enterprise-scale version
 
 Same domain, but built for multiple tenants, high availability, and a much larger user base: ingestion is decoupled from the API via a message broker, evaluation runs as its own scalable consumer, and SignalR gets a backplane so it works across many API instances.
